@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微博生鲜评论工作台</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 900px; margin: 0 auto; padding: 20px;
+            background: #f5f5f5; color: #333;
+        }
+        h1 { font-size: 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+        .stats {
+            display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+        }
+        .stat-card {
+            background: white; padding: 12px 20px; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex: 1; min-width: 100px;
+            text-align: center;
+        }
+        .stat-card .num { font-size: 24px; font-weight: bold; color: #e85d3a; }
+        .stat-card .label { font-size: 12px; color: #666; margin-top: 4px; }
+        .toolbar {
+            display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .toolbar select, .toolbar button {
+            padding: 8px 14px; border: 1px solid #ddd; border-radius: 6px;
+            background: white; font-size: 14px; cursor: pointer;
+        }
+        .toolbar button {
+            background: #e85d3a; color: white; border: none;
+        }
+        .toolbar button:hover { background: #d44a2a; }
+        .toolbar button.secondary { background: #666; }
+        .toolbar button.secondary:hover { background: #555; }
+        .toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .post-card {
+            background: white; border-radius: 10px; padding: 16px;
+            margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            transition: box-shadow 0.2s;
+        }
+        .post-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+        .post-header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+        }
+        .post-author { font-weight: 600; font-size: 15px; }
+        .post-tags { display: flex; gap: 6px; }
+        .tag {
+            font-size: 11px; padding: 2px 8px; border-radius: 10px;
+            background: #f0f0f0; color: #666;
+        }
+        .tag.intent { background: #e8f5e9; color: #2e7d32; }
+        .tag.safe { background: #fff3e0; color: #e65100; }
+        .tag.product { background: #e3f2fd; color: #1565c0; }
+        .post-meta {
+            font-size: 13px; color: #999; margin-bottom: 8px;
+        }
+        .post-text {
+            font-size: 14px; line-height: 1.6; margin-bottom: 12px;
+            color: #444; max-height: 80px; overflow: hidden;
+            position: relative;
+        }
+        .post-text.expanded { max-height: none; }
+        .expand-btn {
+            font-size: 12px; color: #e85d3a; cursor: pointer; border: none;
+            background: none; padding: 0; margin-top: 4px;
+        }
+        .comments-section { margin-top: 10px; border-top: 1px solid #eee; padding-top: 10px; }
+        .comments-title { font-size: 13px; color: #666; margin-bottom: 8px; }
+        .comment-item {
+            background: #fafafa; padding: 10px 12px; border-radius: 6px;
+            margin-bottom: 6px; border-left: 3px solid #e85d3a;
+            font-size: 14px; line-height: 1.5; cursor: pointer;
+            transition: background 0.15s;
+        }
+        .comment-item:hover { background: #fef0ed; }
+        .comment-item .comment-actions {
+            margin-top: 6px; font-size: 12px; color: #999;
+        }
+        .comment-item.sent {
+            opacity: 0.4; border-left-color: #bbb;
+        }
+        .comment-item.sent:hover { background: #f5f5f5; }
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: #999;
+        }
+        .empty-state p { margin-top: 8px; }
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 10px 20px; border-radius: 8px;
+            font-size: 14px; opacity: 0; transition: opacity 0.3s;
+            pointer-events: none; z-index: 100;
+        }
+        .toast.show { opacity: 1; }
+        .loading {
+            text-align: center; padding: 40px; color: #999;
+        }
+        .loading::after {
+            content: ''; display: inline-block; width: 20px; height: 20px;
+            border: 2px solid #ddd; border-top-color: #e85d3a;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            margin-left: 8px; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <h1>🥩 微博生鲜评论工作台</h1>
+
+    <div class="stats" id="stats">
+        <div class="stat-card"><div class="num" id="stat-total">-</div><div class="label">帖子总数</div></div>
+        <div class="stat-card"><div class="num" id="stat-analyzed">-</div><div class="label">已分析</div></div>
+        <div class="stat-card"><div class="num" id="stat-safe">-</div><div class="label">可植入</div></div>
+        <div class="stat-card"><div class="num" id="stat-comments">-</div><div class="label">生成评论</div></div>
+        <div class="stat-card"><div class="num" id="stat-sent">-</div><div class="label">已使用</div></div>
+    </div>
+
+    <div class="toolbar">
+        <select id="filterKey">
+            <option value="">全部关键词</option>
+            <option value="烤肠推荐">烤肠推荐</option>
+            <option value="猪排怎么做">猪排怎么做</option>
+            <option value="纯肉肠测评">纯肉肠测评</option>
+            <option value="快手早餐">快手早餐</option>
+        </select>
+        <button onclick="loadPosts()">🔄 刷新</button>
+        <button class="secondary" onclick="runPipeline()" id="pipelineBtn">▶ 手动执行全流程</button>
+        <span style="flex:1"></span>
+        <button class="secondary" id="unanalyzedToggle" onclick="toggleUnanalyzed()">📋 查看未分析</button>
+    </div>
+
+    <div id="posts-container">
+        <div class="loading">加载中...</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let showUnanalyzed = false;
+        let currentPostId = null;
+
+        async function loadStats() {
+            try {
+                const resp = await fetch('/api/stats');
+                const stats = await resp.json();
+                document.getElementById('stat-total').textContent = stats.total_posts;
+                document.getElementById('stat-analyzed').textContent = stats.analyzed_posts;
+                document.getElementById('stat-safe').textContent = stats.safe_posts;
+                document.getElementById('stat-comments').textContent = stats.total_comments;
+                document.getElementById('stat-sent').textContent = stats.sent_comments;
+            } catch(e) { console.error('加载统计失败', e); }
+        }
+
+        async function loadPosts() {
+            const container = document.getElementById('posts-container');
+            container.innerHTML = '<div class="loading">加载中...</div>';
+
+            try {
+                let url;
+                const keyword = document.getElementById('filterKey').value;
+
+                if (showUnanalyzed) {
+                    url = '/api/posts/unanalyzed?limit=50';
+                } else {
+                    url = `/api/posts?only_pending=true&limit=50`;
+                    if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+                }
+
+                const resp = await fetch(url);
+                const posts = await resp.json();
+
+                if (posts.length === 0) {
+                    container.innerHTML = '<div class="empty-state">📭 <p>暂无待处理的帖子</p></div>';
+                    return;
+                }
+
+                let html = '';
+                for (let post of posts) {
+                    const commentsResp = await fetch(`/api/comments/${post.post_id}`);
+                    const comments = await commentsResp.json();
+
+                    const tags = [];
+                    if (post.intent) tags.push(`<span class="tag intent">${post.intent}</span>`);
+                    if (post.safe_for_brand !== null) {
+                        tags.push(`<span class="tag safe">${post.safe_for_brand ? '✅ 可植入' : '❌ 不可植入'}</span>`);
+                    }
+                    if (post.writable_value_type) {
+                        tags.push(`<span class="tag product">${post.writable_value_type}</span>`);
+                    }
+
+                    let commentsHTML = '';
+                    if (comments.length > 0) {
+                        commentsHTML = comments.map(c => `
+                            <div class="comment-item ${c.is_sent ? 'sent' : ''}" 
+                                 onclick="${c.is_sent ? '' : `copyAndMark(${c.id}, '${escapeJs(c.comment_text)}', this)`}"
+                                 title="${c.is_sent ? '已使用' : '点击复制并标记已使用'}">
+                                💬 ${escapeHtml(c.comment_text)}
+                                <div class="comment-actions">
+                                    ${c.is_sent ? '✅ 已使用' : '📋 点击复制并标记'}
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        commentsHTML = '<p style="color:#999;font-size:13px;padding:8px 0;">⏳ 暂无评论，请先执行 AI 分析流程</p>';
+                    }
+
+                    html += `
+                        <div class="post-card">
+                            <div class="post-header">
+                                <span class="post-author">${escapeHtml(post.user_nickname)}</span>
+                                <div class="post-tags">${tags.join('')}</div>
+                            </div>
+                            <div class="post-meta">
+                                👍 ${post.attitudes_count} &nbsp;💬 ${post.comments_count} &nbsp;🔄 ${post.reposts_count}
+                                ${post.keyword ? `&nbsp;· 关键词: ${escapeHtml(post.keyword)}` : ''}
+                            </div>
+                            <div class="post-text" id="text-${post.post_id}">
+                                ${escapeHtml(post.text).substring(0, 200)}${post.text.length > 200 ? '...' : ''}
+                            </div>
+                            ${post.text.length > 200 ? `<button class="expand-btn" onclick="expandPost('${post.post_id}')">展开全文</button>` : ''}
+                            <div class="comments-section">
+                                <div class="comments-title">💡 AI 生成评论建议</div>
+                                ${commentsHTML}
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } catch(e) {
+                console.error('加载帖子失败', e);
+                container.innerHTML = '<div class="empty-state">❌ <p>加载失败，请确认服务已启动</p></div>';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeJs(text) {
+            return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '');
+        }
+
+        function expandPost(postId) {
+            const el = document.getElementById('text-' + postId);
+            el.classList.add('expanded');
+            el.nextElementSibling.style.display = 'none';
+        }
+
+        async function copyAndMark(id, text, el) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('✅ 已复制到剪贴板');
+            } catch {
+                // Fallback
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('✅ 已复制到剪贴板');
+            }
+
+            try {
+                await fetch(`/api/comments/${id}/sent`, { method: 'POST' });
+                el.classList.add('sent');
+                el.innerHTML = '✅ 已复制并标记为已使用';
+                loadStats();
+            } catch(e) {
+                console.error('标记发送失败', e);
+            }
+        }
+
+        function toggleUnanalyzed() {
+            showUnanalyzed = !showUnanalyzed;
+            const btn = document.getElementById('unanalyzedToggle');
+            btn.textContent = showUnanalyzed ? '📋 查看待评论' : '📋 查看未分析';
+            loadPosts();
+        }
+
+        async function runPipeline() {
+            const btn = document.getElementById('pipelineBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 执行中，请稍候...';
+
+            showToast('🚀 开始执行全流程...');
+            try {
+                // 用 fetch 请求后端 pipeline 接口
+                const resp = await fetch('/api/pipeline/run', { method: 'POST' });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || '执行失败');
+                }
+                const result = await resp.json();
+                showToast(`✅ 完成！抓取 ${result.crawled||0} 条，分析 ${result.analyzed||0} 条，生成 ${result.generated||0} 条评论`);
+                loadPosts();
+                loadStats();
+            } catch(e) {
+                console.error('Pipeline 执行失败', e);
+                showToast('❌ ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '▶ 手动执行全流程';
+            }
+        }
+
+        function showToast(msg) {
+            const el = document.getElementById('toast');
+            el.textContent = msg;
+            el.classList.add('show');
+            setTimeout(() => el.classList.remove('show'), 3000);
+        }
+
+        // 初始加载
+        loadStats();
+        loadPosts();
+    </script>
+
+</body>
+</html>
