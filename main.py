@@ -10,16 +10,17 @@ if env_path:
 else:
     load_dotenv(override=True)
 
-# 确保关键依赖已配置
-if not os.environ.get("ZHIPU_API_KEY"):
-    print("[!] 未设置 ZHIPU_API_KEY 环境变量")
-    print("   请在 .env 文件中配置，或 export ZHIPU_API_KEY=your_key")
-    sys.exit(1)
 
-if not os.environ.get("WEIBO_COOKIE") or os.environ.get("WEIBO_COOKIE") == "your_cookie_here":
-    print("[!] 未设置 WEIBO_COOKIE 环境变量")
-    print("   请在 .env 文件中配置微博 Cookie")
-    sys.exit(1)
+def check_env():
+    """检查关键环境变量，缺失时打印警告但不退出（Web端调用不会崩溃）"""
+    ok = True
+    if not os.environ.get("ZHIPU_API_KEY"):
+        print("[!] 未设置 ZHIPU_API_KEY 环境变量")
+        ok = False
+    if not os.environ.get("WEIBO_COOKIE") or os.environ.get("WEIBO_COOKIE") == "your_cookie_here":
+        print("[!] 未设置 WEIBO_COOKIE 环境变量")
+        ok = False
+    return ok
 
 
 def ensure_db():
@@ -31,6 +32,8 @@ def ensure_db():
 
 def run_pipeline():
     """执行完整流水线"""
+    if not check_env():
+        raise RuntimeError("环境变量不完整，请检查 ZHIPU_API_KEY 和 WEIBO_COOKIE 配置")
     from crawler import run_crawler
     from analyzer import batch_analyze
     from generator import batch_generate
