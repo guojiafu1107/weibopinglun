@@ -23,6 +23,15 @@ app = FastAPI(title="微博生鲜评论工作台")
 pipeline_status = {"running": False, "result": None, "error": None}
 
 
+@app.on_event("startup")
+def startup():
+    """启动时自动初始化数据库"""
+    from init_db import init_database, seed_brand_knowledge
+    init_database()
+    seed_brand_knowledge()
+    print(f"[OK] 数据库已初始化: {DB_PATH}")
+
+
 def dict_factory(cursor, row):
     """让查询结果返回字典格式"""
     d = {}
